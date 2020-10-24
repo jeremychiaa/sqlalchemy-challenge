@@ -1,0 +1,9 @@
+# ipynb checkpoints
+.ipynb_checkpoints
+
+# pycache files
+__pycache__/
+
+# config file
+config.py
+config.env
