@@ -1,6 +1,6 @@
 # Import dependencies
 import numpy as np
-
+import datetime as dt
 import sqlalchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
@@ -54,6 +54,7 @@ def precipitation():
     # Query all precipition data
     results = session.query(Measurement.date, Measurement.prcp).all()
 
+    # Close this session
     session.close()
 
     # Create a dictionary from the row data and append to a list of all precipitation
@@ -77,6 +78,7 @@ def stations():
     results = session.query(Station.station, Station.name,
                             Station.latitude, Station.longitude, Station.elevation).all()
 
+    # Close this session
     session.close()
     
     # Create a dictionary from the row data and append to a list of all stations
@@ -94,7 +96,53 @@ def stations():
     return jsonify(all_stations)
 
 
-#@app.route("/api/v1.0/tobs")
+@app.route("/api/v1.0/tobs")
+
+def tobs():
+# Create session from Python to the database
+    session = Session(engine)
+    
+    # Query dates and temperature observations of the most active station for the last year of data
+    
+    # Query most active station
+    most_active_station = session.query(Measurement.station).\
+        group_by(Measurement.station).\
+        order_by(func.count(Measurement.station).desc()).first()
+
+    # Unpack and convert result to string
+    (most_active_station, ) = most_active_station
+
+    # Find last data point date for most active station
+    last_data_point = session.query(Measurement.date).\
+    order_by(Measurement.date.desc()).\
+    filter(Measurement.station == most_active_station).first()
+
+    # Convert result to string and formatting
+    (latest_date,) = last_data_point
+    latest_date = dt.datetime.strptime(latest_date, '%Y-%m-%d')
+    latest_date = latest_date.date()
+
+    # Find date 1 year from last entry
+    date_year_ago = latest_date - dt.timedelta(days=365)
+
+    # Query most active station's temperature observation data for the year
+    most_active_tobs = session.query(Measurement.date, Measurement.tobs).\
+        filter(Measurement.station == most_active_station).\
+        filter(Measurement.date >= date_year_ago)
+
+    # Close this session
+    session.close()
+
+    # Create a dictionary from the row data and append to a list of date and remperature observations
+    most_active_dates_tobs = []
+    for date, tobs in most_active_tobs:
+        active_dict = {}
+        active_dict["date"] = date
+        active_dict["tobs"] = tobs
+        most_active_dates_tobs.append(active_dict)
+
+    # Return JSON representation of dictionary
+    return jsonify(most_active_dates_tobs)
 
 #@app.route("/api/v1.0/<start>")
 
