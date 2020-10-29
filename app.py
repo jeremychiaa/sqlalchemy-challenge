@@ -22,16 +22,11 @@ Base.prepare(engine, reflect=True)
 Measurement = Base.classes.measurement
 Station = Base.classes.station
 
-#################################################
 # Flask Setup
-#################################################
 app = Flask(__name__)
 
-
-#################################################
 # Flask Routes
-#################################################
-
+# Home page route
 @app.route("/")
 def welcome():
     return (
@@ -40,11 +35,14 @@ def welcome():
         f"/api/v1.0/precipitation<br/>"
         f"/api/v1.0/stations<br/>"
         f"/api/v1.0/tobs<br/>"
-        f"/api/v1.0/<start><br/>"
-        f"/api/v1.0/<start>/<end><br/>"
+        f"/api/v1.0/start<br/>"
+        f"/api/v1.0/start/end<br/>"
+        
+        f"Date format e.g. 2016-08-01"
     )
 
 
+# Precipitation data route
 @app.route("/api/v1.0/precipitation")
 def precipitation():
 
@@ -68,6 +66,8 @@ def precipitation():
     # Return JSON representation of dictionary
     return jsonify(all_precipitation)
 
+
+# Stations data route
 @app.route("/api/v1.0/stations")
 def stations():
 
@@ -96,9 +96,10 @@ def stations():
     return jsonify(all_stations)
 
 
+# Most active station tob data route
 @app.route("/api/v1.0/tobs")
-
 def tobs():
+
 # Create session from Python to the database
     session = Session(engine)
     
@@ -133,7 +134,7 @@ def tobs():
     # Close this session
     session.close()
 
-    # Create a dictionary from the row data and append to a list of date and remperature observations
+    # Create a dictionary from the row data and append to a list of date and temperature observations
     most_active_dates_tobs = []
     for date, tobs in most_active_tobs:
         active_dict = {}
@@ -144,9 +145,47 @@ def tobs():
     # Return JSON representation of dictionary
     return jsonify(most_active_dates_tobs)
 
-#@app.route("/api/v1.0/<start>")
 
-#@app.route("/api/v1.0/<start>/<end>")
+# Specified date range and temperature stats route
+# Create route where end date has default value of none
+@app.route("/api/v1.0/<start>", defaults={"end": None})
+@app.route("/api/v1.0/<start>/<end>")
+
+def start_end(start, end):
+
+    # Create session from Python to the database
+    session = Session(engine)
+
+    # Create conditional statement to query various stats based on date ranges
+    if end != None:
+        temp_stats = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+        filter(Measurement.date >= start).filter(Measurement.date <= end).all()
+    
+    else:
+        temp_stats = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+        filter(Measurement.date >= start)
+        
+    # Close this session
+    session.close()
+
+    # Set default null temp data as null
+    null_temp_data = False
+
+    # Convert query results to a list
+    temp_stats_list = []
+        
+    for min_temp, avg_temp, max_temp in temp_stats:
+        if min_temp == None or avg_temp == None or max_temp == None:
+            null_temp_data = True
+        temp_stats_list.append(min_temp)
+        temp_stats_list.append(avg_temp)
+        temp_stats_list.append(max_temp)
+
+    # Return results in JSON format
+    if null_temp_data == True:
+        return "No temperature data found. Please provide another date range."
+    else:
+        return jsonify(temp_stats_list)
 
 if __name__ == "__main__":
     app.run(debug=True)
